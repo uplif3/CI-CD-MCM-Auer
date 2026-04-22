@@ -10,4 +10,4 @@ Git verwende ich seit ungefähr 3 Jahren, go ist neu für mich
 Gerade in meiner Firma ist es noch Standard Builds mittels Skript am Server anzuwerfen, daher Pipelines und dabei auch OSS Tools beleuchten, wo am besten möglich!
 
 ## Warum CD für agile Teams wichtig ist
-Weniger Risikio, schnelleres Feedback durch Pipeline, häufigere Releases
+Weniger Risiko, schnelleres Feedback durch Pipeline, häufigere Releases
