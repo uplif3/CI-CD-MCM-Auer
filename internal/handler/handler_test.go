@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/mrckurz/CI-CD-MCM/internal/model"
 	"github.com/mrckurz/CI-CD-MCM/internal/store"
 )
 
@@ -77,4 +79,78 @@ func TestGetProductNotFound(t *testing.T) {
 	}
 }
 
-// TODO: Add tests for UpdateProduct, DeleteProduct, and invalid payloads
+func TestUpdateProduct(t *testing.T) {
+	h := NewHandler(store.NewMemoryStore())
+	r := mux.NewRouter()
+	h.RegisterRoutes(r)
+
+	// Produkt anlegen
+	body := `{"name":"Widget","price":9.99}`
+	req := httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d", rec.Code)
+	}
+
+	// Produkt aktualisieren
+	updateBody := `{"name":"Updated Widget","price":19.99}`
+	req2 := httptest.NewRequest(http.MethodPut, "/products/1", strings.NewReader(updateBody))
+	rec2 := httptest.NewRecorder()
+	r.ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec2.Code)
+	}
+	var updated model.Product
+	json.NewDecoder(rec2.Body).Decode(&updated)
+	if updated.Name != "Updated Widget" {
+		t.Errorf("expected 'Updated Widget', got '%s'", updated.Name)
+	}
+}
+
+func TestDeleteProduct(t *testing.T) {
+	h := NewHandler(store.NewMemoryStore())
+	r := mux.NewRouter()
+	h.RegisterRoutes(r)
+
+	// Produkt anlegen
+	body := `{"name":"Widget","price":9.99}`
+	req := httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d", rec.Code)
+	}
+
+	// Produkt löschen
+	req2 := httptest.NewRequest(http.MethodDelete, "/products/1", nil)
+	rec2 := httptest.NewRecorder()
+	r.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected 200 on delete, got %d", rec2.Code)
+	}
+
+	// 404 prüfen
+	req3 := httptest.NewRequest(http.MethodGet, "/products/1", nil)
+	rec3 := httptest.NewRecorder()
+	r.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusNotFound {
+		t.Errorf("expected 404 after delete, got %d", rec3.Code)
+	}
+}
+
+func TestCreateInvalidProduct(t *testing.T) {
+	h := NewHandler(store.NewMemoryStore())
+	r := mux.NewRouter()
+	h.RegisterRoutes(r)
+
+	body := `{"name":"","price":9.99}`
+	req := httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty name, got %d", rec.Code)
+	}
+}
