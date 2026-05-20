@@ -34,12 +34,18 @@ jobs:
           grep -vE "postgres|cmd/api" coverage.out > coverage_filtered.out
           go tool cover -func=coverage_filtered.out | awk '/total:/{gsub(/%/,"",$3); if($3+0 < 80){print "Coverage "$3"% is below 80%"; exit 1}else{print "Coverage OK: "$3"%"}}'
 
+      - name: Generate coverage HTML report
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
+        run: go tool cover -html=coverage.out -o coverage.html
+
       - name: Upload coverage artifact
         if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage.out
+          path: |
+            coverage.out
+            coverage.html
 
       - name: Build
         run: go build -o api-server ./cmd/api
