@@ -1,10 +1,21 @@
 package store
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/mrckurz/CI-CD-MCM/internal/model"
+)
 
 func TestCreateAndGet(t *testing.T) {
-	_ = NewMemoryStore()
-	// TODO: Add test -- create a product and verify GetByID returns it
+	s := NewMemoryStore()
+	p := s.Create(model.Product{Name: "Widget", Price: 9.99})
+	got, err := s.GetByID(p.ID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if got.Name != "Widget" {
+		t.Errorf("expected 'Widget', got '%s'", got.Name)
+	}
 }
 
 func TestGetAllEmpty(t *testing.T) {
@@ -15,6 +26,46 @@ func TestGetAllEmpty(t *testing.T) {
 	}
 }
 
+func TestGetByIDNotFound(t *testing.T) {
+	s := NewMemoryStore()
+	_, err := s.GetByID(999)
+	if err != ErrNotFound {
+		t.Error("expected ErrNotFound for missing product")
+	}
+}
+
+func TestUpdate(t *testing.T) {
+	s := NewMemoryStore()
+	p := s.Create(model.Product{Name: "Widget", Price: 9.99})
+	updated, err := s.Update(p.ID, model.Product{Name: "Updated", Price: 19.99})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if updated.Name != "Updated" {
+		t.Errorf("expected 'Updated', got '%s'", updated.Name)
+	}
+}
+
+func TestUpdateNotFound(t *testing.T) {
+	s := NewMemoryStore()
+	_, err := s.Update(999, model.Product{Name: "X", Price: 1})
+	if err != ErrNotFound {
+		t.Error("expected ErrNotFound when updating non-existent product")
+	}
+}
+
+func TestDeleteExisting(t *testing.T) {
+	s := NewMemoryStore()
+	p := s.Create(model.Product{Name: "Widget", Price: 9.99})
+	if err := s.Delete(p.ID); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	_, err := s.GetByID(p.ID)
+	if err != ErrNotFound {
+		t.Error("expected ErrNotFound after deletion")
+	}
+}
+
 func TestDeleteNonExistent(t *testing.T) {
 	s := NewMemoryStore()
 	err := s.Delete(999)
@@ -22,5 +73,3 @@ func TestDeleteNonExistent(t *testing.T) {
 		t.Error("expected ErrNotFound when deleting non-existent product")
 	}
 }
-
-// TODO: Add tests for Update, Delete of existing product, and GetByID with invalid ID
