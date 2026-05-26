@@ -1,6 +1,3 @@
-# golangci-lint configuration
-# Reference: https://golangci-lint.run/usage/configuration/
-
 run:
   timeout: 5m
 
@@ -12,15 +9,16 @@ linters:
     - unused
     - ineffassign
     - gosimple
-    # TODO: Enable additional linters:
-    # - gofmt
-    # - gocyclo
-    # - misspell
-    # - gocritic
+    - gofmt
+    - gocyclo
+    - misspell
+    - gocritic
 
 linters-settings:
   errcheck:
     check-type-assertions: true
+  gocyclo:
+    min-complexity: 15
 
 issues:
   exclude-rules:

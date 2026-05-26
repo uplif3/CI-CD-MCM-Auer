@@ -2,17 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
-    branches: [main]
+    branches: ["**"]
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go-version: ["1.26"]
-        # TODO: Add go-version "1.25" to the matrix for multi-version testing
+        os: [ubuntu-latest, macos-latest]
+        go-version: ["1.25","1.26"]
 
     steps:
       - uses: actions/checkout@v4
@@ -28,17 +28,42 @@ jobs:
       - name: Run tests with coverage
         run: go test -v -coverprofile=coverage.out ./...
 
+      - name: Check coverage threshold
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
+        run: |
+          grep -vE "postgres|cmd/api" coverage.out > coverage_filtered.out
+          go tool cover -func=coverage_filtered.out | awk '/total:/{gsub(/%/,"",$3); if($3+0 < 80){print "Coverage "$3"% is below 80%"; exit 1}else{print "Coverage OK: "$3"%"}}'
+
+      - name: Generate coverage HTML report
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
+        run: go tool cover -html=coverage.out -o coverage.html
+
       - name: Upload coverage artifact
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ matrix.go-version }}
-          path: coverage.out
+          name: coverage-report
+          path: |
+            coverage.out
+            coverage.html
 
       - name: Build
         run: go build -o api-server ./cmd/api
 
-  # TODO: Add lint job using golangci-lint
-  # Hint: Use the golangci/golangci-lint-action@v4 action
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
 
   docker-build:
     runs-on: ubuntu-latest
@@ -57,12 +82,74 @@ jobs:
           push: false
           tags: product-catalog:${{ github.sha }}
 
-  # TODO: Add sonarcloud job
-  # Hint: Use the SonarSource/sonarqube-scan-action or sonarcloud-github-action
-  # You will need to configure sonar-project.properties
+  sonarcloud:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-  # TODO: Add vulnerability-scan job using govulncheck
-  # Hint: Install with "go install golang.org/x/vuln/cmd/govulncheck@latest"
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
 
-  # TODO: Add trivy-scan job for Docker image vulnerability scanning
-  # Hint: Use aquasecurity/trivy-action@master after the docker-build job
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # Task 2 – Dependency Scanning mit govulncheck
+  vulnerability-scan:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  # Task 1 – Docker Image Vulnerability Scanning mit Trivy
+  trivy-scan:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image for scanning
+        run: docker build -t product-catalog:latest .
+
+      - name: Run Trivy vulnerability scanner (table)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'product-catalog:latest'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy vulnerability scanner (JSON report)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'product-catalog:latest'
+          format: 'json'
+          output: 'trivy-report.json'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+        if: always()
+
+      - name: Upload Trivy report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-report.json
+        if: always()
